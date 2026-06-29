@@ -1,207 +1,211 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ターゲットコンパス（デバッグ版）</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      background-color: #222;
-      color: #fff;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    #start-btn {
-      padding: 15px 30px;
-      font-size: 18px;
-      font-weight: bold;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-bottom: 20px;
-    }
-    #compass-container {
-      position: relative;
-      width: 250px;
-      height: 250px;
-      border-radius: 50%;
-      border: 5px solid #fff;
-      background-color: #333;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 15px rgba(0,0,0,0.5);
-    }
-    #arrow {
-      font-size: 80px;
-      position: absolute;
-      transform-origin: center center;
-      transition: transform 0.1s ease-out;
-    }
-    #info, #debug {
-      margin-top: 20px;
-      font-size: 14px;
-      line-height: 1.6;
-      display: none;
-      width: 100%;
-      max-width: 300px;
-      text-align: left;
-    }
-    #debug {
-      color: #ff9999;
-      background: rgba(255,0,0,0.1);
-      padding: 10px;
-      border-radius: 5px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宝探しレーダー</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            color: white;
+            transition: background-color 0.5s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100vh;
+        }
+        #start-screen, #game-screen {
+            padding: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .data-box {
+            background: rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px auto;
+            width: 80%;
+            max-width: 300px;
+        }
+        .big-text {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        /* 宝の方向を向いた時の背景色 */
+        .found-direction {
+            background-color: #f1c40f !important; /* ゴールド */
+            color: #2c3e50;
+        }
+    </style>
 </head>
 <body>
 
-  <h2>目的地案内コンパス</h2>
-  <button id="start-btn">コンパスを起動する</button>
-
-  <div id="compass-container">
-    <div id="arrow">⬆️</div>
-  </div>
-
-  <div id="info">
-    【目的地】<br>北緯: 35.6263<br>東経: 139.6338<br><br>
-    【現在地からの距離】<br><span id="distance">GPS取得中...</span> km
-  </div>
-
-  <div id="debug">
+    <div id="start-screen">
+        <h2>宝探しスタート</h2>
+        <p>位置情報とコンパスを使用します</p>
+        <button id="start-btn">ゲーム開始</button>
     </div>
 
-  <script>
-    // 目的地の座標
-    const TARGET_LAT = 35.6263;
-    const TARGET_LNG = 139.6338;
+    <div id="game-screen" style="display: none;">
+        <h2>宝探しレーダー</h2>
+        <div id="message" class="big-text">宝の方向を探せ！</div>
+        
+        <div class="data-box">
+            <p>最も近い宝までの距離</p>
+            <div id="distance-display" class="big-text">-- m</div>
+        </div>
+    </div>
 
-    let currentLat = null;
-    let currentLng = null;
-    let currentHeading = null;
-    let targetBearing = null;
+    <script>
+        // 宝の座標リスト（2箇所）
+        const TREASURES = [
+            { lat: 35.6263, lng: 139.6338 },
+            { lat: 35.625839, lng: 139.637095 }
+        ];
 
-    const startBtn = document.getElementById('start-btn');
-    const compassContainer = document.getElementById('compass-container');
-    const arrow = document.getElementById('arrow');
-    const info = document.getElementById('info');
-    const distanceSpan = document.getElementById('distance');
-    const debugDiv = document.getElementById('debug');
+        // 状態を保持する変数
+        let currentLat = null;
+        let currentLng = null;
+        let targetBearing = 0;
 
-    // デバッグメッセージを表示する関数
-    function logError(msg) {
-      debugDiv.style.display = 'block';
-      debugDiv.innerHTML += `・${msg}<br>`;
-    }
+        const startBtn = document.getElementById('start-btn');
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const distanceDisplay = document.getElementById('distance-display');
+        const messageDisplay = document.getElementById('message');
 
-    startBtn.addEventListener('click', async () => {
-      debugDiv.innerHTML = ''; // エラーリセット
-      
-      // 1. センサー（デバイスの向き）の許可リクエスト (iOS 13+ 対応)
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try {
-          const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission !== 'granted') {
-            logError('センサーの利用が拒否されました。設定からSafariのモーションセンサーをオンにしてください。');
-            return;
-          }
-        } catch (error) {
-          logError('センサーの許可リクエストに失敗しました（HTTPS通信ではない可能性があります）。');
-          return;
+        startBtn.addEventListener('click', async () => {
+            // iOS 13+ の DeviceOrientation API 許可リクエスト
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permissionState = await DeviceOrientationEvent.requestPermission();
+                    if (permissionState !== 'granted') {
+                        alert('コンパスの使用が許可されませんでした。');
+                        return;
+                    }
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            // 画面切り替え
+            startScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+
+            // 位置情報の取得開始
+            startGeolocation();
+            
+            // コンパス（デバイスの向き）の取得開始
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        });
+
+        function startGeolocation() {
+            if (!navigator.geolocation) {
+                alert('このブラウザは位置情報に対応していません。');
+                return;
+            }
+
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    currentLat = position.coords.latitude;
+                    currentLng = position.coords.longitude;
+
+                    let minDistance = Infinity;
+                    let closestTreasure = TREASURES[0];
+
+                    // すべての宝との距離を計算し、最も近いものを探す
+                    TREASURES.forEach(treasure => {
+                        const distance = calculateDistance(currentLat, currentLng, treasure.lat, treasure.lng);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestTreasure = treasure;
+                        }
+                    });
+
+                    // 最も近い宝までの距離を表示
+                    distanceDisplay.innerText = Math.round(minDistance) + ' m';
+
+                    // 最も近い宝の方角を計算
+                    targetBearing = calculateBearing(currentLat, currentLng, closestTreasure.lat, closestTreasure.lng);
+                },
+                (error) => {
+                    console.warn('位置情報の取得エラー:', error.message);
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+            );
         }
-      }
 
-      // UI表示切り替え
-      startBtn.style.display = 'none';
-      compassContainer.style.display = 'flex';
-      info.style.display = 'block';
+        function handleOrientation(event) {
+            if (currentLat === null) return;
 
-      // センサーの値を取得開始
-      window.addEventListener('deviceorientation', handleOrientation, true);
+            let heading = null;
 
-      // 2. 位置情報（GPS）の取得開始
-      if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(
-          updatePosition,
-          (err) => { 
-            let errMsg = '位置情報エラー: ' + err.message;
-            if (err.code === 1) errMsg = '位置情報の利用が拒否されました。スマホの設定を確認してください。';
-            if (err.code === 2) errMsg = '電波状況が悪く、位置が特定できません。';
-            logError(errMsg);
-          },
-          { enableHighAccuracy: true, maximumAge: 0 }
-        );
-      } else {
-        logError('このブラウザはGPSに対応していません。');
-      }
-    });
+            // iOS と Android の違いを吸収
+            if (event.webkitCompassHeading) {
+                heading = event.webkitCompassHeading;
+            } else if (event.alpha !== null) {
+                heading = 360 - event.alpha;
+            }
 
-    // デバイスの向きを処理する
-    function handleOrientation(event) {
-      if (event.webkitCompassHeading) {
-        currentHeading = event.webkitCompassHeading; // iOS用
-      } else if (event.alpha !== null) {
-        currentHeading = 360 - event.alpha; // Android用
-      } else {
-        logError('コンパスのセンサー値が取得できません。');
-      }
-      updateCompass();
-    }
+            if (heading === null) return;
 
-    // 現在地が更新されたときの処理
-    function updatePosition(position) {
-      currentLat = position.coords.latitude;
-      currentLng = position.coords.longitude;
-      
-      targetBearing = calculateBearing(currentLat, currentLng, TARGET_LAT, TARGET_LNG);
-      const distance = calculateDistance(currentLat, currentLng, TARGET_LAT, TARGET_LNG);
-      
-      distanceSpan.textContent = distance.toFixed(3);
-      updateCompass();
-    }
+            // 最も近い宝の方向とスマホの向きの差を計算
+            let diff = Math.abs(heading - targetBearing);
+            if (diff > 180) {
+                diff = 360 - diff;
+            }
 
-    // コンパスの針を回転させる
-    function updateCompass() {
-      if (currentHeading !== null && targetBearing !== null) {
-        let rotation = targetBearing - currentHeading;
-        arrow.style.transform = `rotate(${rotation}deg)`;
-      }
-    }
+            // 誤差±20度以内なら反応させる
+            if (diff <= 20) {
+                document.body.classList.add('found-direction');
+                messageDisplay.innerText = "✨ こっちだ！ ✨";
+            } else {
+                document.body.classList.remove('found-direction');
+                messageDisplay.innerText = "宝の方向を探せ！";
+            }
+        }
 
-    // 2点間の方位を計算
-    function calculateBearing(lat1, lng1, lat2, lng2) {
-      const toRad = Math.PI / 180;
-      const toDeg = 180 / Math.PI;
-      const rLat1 = lat1 * toRad;
-      const rLat2 = lat2 * toRad;
-      const dLng = (lng2 - lng1) * toRad;
-      const y = Math.sin(dLng) * Math.cos(rLat2);
-      const x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLng);
-      const bearing = Math.atan2(y, x) * toDeg;
-      return (bearing + 360) % 360;
-    }
+        // 2点間の距離を計算する関数 (ハヴァーサイン公式)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-    // 2点間の距離(km)を計算
-    function calculateDistance(lat1, lng1, lat2, lng2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-  </script>
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // 2点間の方位角を計算する関数
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const λ1 = lon1 * Math.PI / 180;
+            const λ2 = lon2 * Math.PI / 180;
+            const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) -
+                      Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+            let θ = Math.atan2(y, x);
+            let bearing = (θ * 180 / Math.PI + 360) % 360;
+            return bearing;
+        }
+    </script>
 </body>
 </html>
