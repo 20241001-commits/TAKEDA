@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>宝探しレーダー</title>
+    <title>宝探しレーダー＆発見</title>
     <style>
         body {
             font-family: sans-serif;
@@ -18,7 +18,7 @@
             justify-content: center;
             height: 100vh;
         }
-        #start-screen, #game-screen {
+        #start-screen, #game-screen, #found-screen {
             padding: 20px;
         }
         button {
@@ -30,47 +30,85 @@
             border-radius: 8px;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-top: 20px;
         }
         .big-text {
             font-size: 24px;
             font-weight: bold;
             margin: 10px 0;
         }
-        /* 宝の方向を向いた時の背景色 */
         .found-direction {
-            background-color: #f1c40f !important; /* ゴールド */
+            background-color: #f1c40f !important;
             color: #2c3e50;
+        }
+        #treasure-image {
+            width: 80%;
+            max-width: 300px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
 
+    <!-- スタート画面 -->
     <div id="start-screen">
         <h2>クエストスタート</h2>
         <p>位置情報とコンパスを使用します</p>
         <button id="start-btn">ゲーム開始</button>
     </div>
 
+    <!-- レーダー画面 -->
     <div id="game-screen" style="display: none;">
         <h2>クイズレーダー</h2>
-        <div id="message" class="big-text">クエストの方向を探せ！</div>
+        <div id="message" class="big-text">宝の方向を探せ！</div>
+        <p id="distance-info">一番近い宝まで: 測定中...</p>
+    </div>
+
+    <!-- 発見（画像表示）画面 -->
+    <div id="found-screen" style="display: none;">
+        <h2 id="treasure-title">宝を発見！</h2>
+        <img id="treasure-image" src="" alt="宝の画像">
+        <br>
+        <button id="back-btn">探索に戻る</button>
     </div>
 
     <script>
-        // クエストの座標リスト（いくつでも追加可能）
+        // クエストの座標と画像のリスト
+        // ※自分の好きな画像URLや座標に変更してください
         const TREASURES = [
-            { lat: 35.6263, lng: 139.6338 },
-            { lat: 35.625839, lng: 139.637095 },
-            { lat: 35.6327, lng: 139.8805 }
+            { 
+                name: "千古の家", 
+                lat: 36.1539527, 
+                lng: 136.3337006, 
+                img: "https://via.placeholder.com/300/e74c3c/ffffff?text=Sword" 
+            },
+            { 
+                name: "メロディパーク", 
+                lat: 36.1616815, 
+                lng: 139.637095, 
+                img: "https://via.placeholder.com/300/3498db/ffffff?text=Tablet" 
+            }
         ];
+
+        // 宝と判定する距離（メートル）
+        const FIND_RADIUS = 20; 
 
         let currentLat = null;
         let currentLng = null;
+        let watchId = null;
+        let foundTreasures = new Set(); // すでに発見した宝を記憶
 
         const startBtn = document.getElementById('start-btn');
+        const backBtn = document.getElementById('back-btn');
         const startScreen = document.getElementById('start-screen');
         const gameScreen = document.getElementById('game-screen');
+        const foundScreen = document.getElementById('found-screen');
         const messageDisplay = document.getElementById('message');
+        const distanceInfo = document.getElementById('distance-info');
+        const treasureTitle = document.getElementById('treasure-title');
+        const treasureImage = document.getElementById('treasure-image');
 
         startBtn.addEventListener('click', async () => {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -92,16 +130,22 @@
             window.addEventListener('deviceorientation', handleOrientation, true);
         });
 
+        backBtn.addEventListener('click', () => {
+            foundScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+        });
+
         function startGeolocation() {
             if (!navigator.geolocation) {
                 alert('このブラウザは位置情報に対応していません。');
                 return;
             }
 
-            navigator.geolocation.watchPosition(
+            watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     currentLat = position.coords.latitude;
                     currentLng = position.coords.longitude;
+                    checkDistance(); // 位置が更新されるたびに距離をチェック
                 },
                 (error) => {
                     console.warn('位置情報の取得エラー:', error.message);
@@ -110,57 +154,100 @@
             );
         }
 
-        function handleOrientation(event) {
+        // 距離をチェックし、一定距離以内なら画像を表示する
+        function checkDistance() {
             if (currentLat === null) return;
 
-            let heading = null;
+            let minDistance = Infinity;
 
+            TREASURES.forEach((treasure, index) => {
+                if (foundTreasures.has(index)) return; // 発見済みの宝は無視
+
+                const distance = calculateDistance(currentLat, currentLng, treasure.lat, treasure.lng);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                }
+
+                // 指定した距離以内に入ったら「発見」
+                if (distance <= FIND_RADIUS) {
+                    foundTreasures.add(index);
+                    showFoundScreen(treasure);
+                }
+            });
+
+            if (minDistance !== Infinity) {
+                distanceInfo.innerText = `一番近い宝まで: 約 ${Math.round(minDistance)} m`;
+            } else {
+                distanceInfo.innerText = "すべての宝を見つけました！";
+            }
+        }
+
+        // 発見画面への切り替え処理
+        function showFoundScreen(treasure) {
+            gameScreen.style.display = 'none';
+            foundScreen.style.display = 'block';
+            treasureTitle.innerText = `${treasure.name} を発見！`;
+            treasureImage.src = treasure.img;
+            document.body.classList.remove('found-direction');
+        }
+
+        function handleOrientation(event) {
+            if (currentLat === null || gameScreen.style.display === 'none') return;
+
+            let heading = null;
             if (event.webkitCompassHeading) {
                 heading = event.webkitCompassHeading;
             } else if (event.alpha !== null) {
                 heading = 360 - event.alpha;
             }
-
             if (heading === null) return;
 
             let isLookingAtTreasure = false;
 
-            // 全ての宝の方向を順番にチェックする
-            TREASURES.forEach(treasure => {
+            TREASURES.forEach((treasure, index) => {
+                if (foundTreasures.has(index)) return; // 発見済みの宝の方向は無視
+
                 let bearing = calculateBearing(currentLat, currentLng, treasure.lat, treasure.lng);
                 let diff = Math.abs(heading - bearing);
-                if (diff > 180) {
-                    diff = 360 - diff;
-                }
+                if (diff > 180) diff = 360 - diff;
                 
-                // いずれかの宝の方向に±2度以内で向いていたらフラグを立てる
-                if (diff <= 2) {
+                if (diff <= 5) { // 少し甘めに±5度に設定
                     isLookingAtTreasure = true;
                 }
             });
 
-            // どれか1つの宝の方を向いていれば光らせる
             if (isLookingAtTreasure) {
                 document.body.classList.add('found-direction');
-                messageDisplay.innerText = "✨ ドンピシャ！ ✨";
+                messageDisplay.innerText = "✨ ドンピシャ！前進せよ ✨";
             } else {
                 document.body.classList.remove('found-direction');
                 messageDisplay.innerText = "宝の方向を探せ！";
             }
         }
 
-        // 2点間の方位角を計算する関数
+        // 2点間の「距離（メートル）」を計算する関数（ヒュベニの公式/ハヴァサイン公式等）
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // 地球の半径 (メートル)
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 2点間の「方位角」を計算する関数
         function calculateBearing(lat1, lon1, lat2, lon2) {
             const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
             const λ1 = lon1 * Math.PI / 180;
             const λ2 = lon2 * Math.PI / 180;
             const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-            const x = Math.cos(φ1) * Math.sin(φ2) -
-                      Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+            const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
             let θ = Math.atan2(y, x);
-            let bearing = (θ * 180 / Math.PI + 360) % 360;
-            return bearing;
+            return (θ * 180 / Math.PI + 360) % 360;
         }
     </script>
 </body>
