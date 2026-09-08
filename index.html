@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>宝探しレーダー＆発見</title>
+    <title>方向探知レーダー</title>
     <style>
         body {
             font-family: sans-serif;
@@ -12,13 +12,13 @@
             padding: 0;
             background-color: #2c3e50;
             color: white;
-            transition: background-color 0.1s ease;
+            transition: background-color 0.2s ease; /* 色の切り替えを少し滑らかに */
             display: flex;
             flex-direction: column;
             justify-content: center;
             height: 100vh;
         }
-        #start-screen, #game-screen, #found-screen {
+        #start-screen, #game-screen {
             padding: 20px;
         }
         button {
@@ -33,20 +33,20 @@
             margin-top: 20px;
         }
         .big-text {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
-            margin: 10px 0;
+            margin: 20px 0;
+            line-height: 1.5;
         }
         .found-direction {
             background-color: #f1c40f !important;
             color: #2c3e50;
         }
-        #treasure-image {
-            width: 80%;
-            max-width: 300px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            margin-top: 20px;
+        .destination-name {
+            font-size: 32px;
+            color: #e74c3c;
+            display: block;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -56,64 +56,38 @@
     <div id="start-screen">
         <h2>クエストスタート</h2>
         <p>位置情報とコンパスを使用します</p>
-        <button id="start-btn">ゲーム開始</button>
+        <button id="start-btn">レーダー起動</button>
     </div>
 
     <!-- レーダー画面 -->
     <div id="game-screen" style="display: none;">
         <h2>クイズレーダー</h2>
-        <div id="message" class="big-text">宝の方向を探せ！</div>
-        <p id="distance-info">一番近い宝まで: 測定中...</p>
-    </div>
-
-    <!-- 発見（画像表示）画面 -->
-    <div id="found-screen" style="display: none;">
-        <h2 id="treasure-title">宝を発見！</h2>
-        <img id="treasure-image" src="" alt="宝の画像">
-        <br>
-        <button id="back-btn">探索に戻る</button>
+        <div id="message" class="big-text">スマホを持って周りを見渡せ！</div>
+        <p id="distance-info">位置情報を取得中...</p>
     </div>
 
     <script>
-        // クエストの座標と画像のリスト
-        // ※自分の好きな画像URLや座標に変更してください
+        // クエストの座標リスト
         const TREASURES = [
-            { 
-                name: "千古の家", 
-                lat: 36.1539527, 
-                lng: 136.3337006, 
-            },
-            { 
-                name: "メロディパーク", 
-                lat: 36.1616815, 
-                lng: 139.637095, 
-            },
-            { 
-                name: "ヤギ", 
-                lat: 36.1616538, 
-                lng: 136.3318184, 
-            }
+            { name: "千古の家", lat: 36.1539527, lng: 136.3337006 },
+            { name: "メロディパーク", lat: 36.1616815, lng: 139.637095 },
+            { name: "ヤギ", lat: 36.1616538, lng: 136.3318184 },
+            { name: "日吉神社", lat: 36.1670457, lng: 136.3310140 } // ← カンマ抜けを修正しました
         ];
-
-        // 宝と判定する距離（メートル）
-        const FIND_RADIUS = 20; 
 
         let currentLat = null;
         let currentLng = null;
         let watchId = null;
-        let foundTreasures = new Set(); // すでに発見した宝を記憶
 
         const startBtn = document.getElementById('start-btn');
-        const backBtn = document.getElementById('back-btn');
         const startScreen = document.getElementById('start-screen');
         const gameScreen = document.getElementById('game-screen');
-        const foundScreen = document.getElementById('found-screen');
         const messageDisplay = document.getElementById('message');
         const distanceInfo = document.getElementById('distance-info');
-        const treasureTitle = document.getElementById('treasure-title');
-        const treasureImage = document.getElementById('treasure-image');
 
+        // スタートボタンを押した時の処理
         startBtn.addEventListener('click', async () => {
+            // iOS向けのコンパス許可リクエスト
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceOrientationEvent.requestPermission();
@@ -133,11 +107,7 @@
             window.addEventListener('deviceorientation', handleOrientation, true);
         });
 
-        backBtn.addEventListener('click', () => {
-            foundScreen.style.display = 'none';
-            gameScreen.style.display = 'block';
-        });
-
+        // 位置情報の取得
         function startGeolocation() {
             if (!navigator.geolocation) {
                 alert('このブラウザは位置情報に対応していません。');
@@ -148,90 +118,75 @@
                 (position) => {
                     currentLat = position.coords.latitude;
                     currentLng = position.coords.longitude;
-                    checkDistance(); // 位置が更新されるたびに距離をチェック
+                    checkDistance(); 
                 },
                 (error) => {
                     console.warn('位置情報の取得エラー:', error.message);
+                    distanceInfo.innerText = "位置情報が取得できません";
                 },
                 { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
             );
         }
 
-        // 距離をチェックし、一定距離以内なら画像を表示する
+        // 一番近い場所までの距離を計算して表示
         function checkDistance() {
             if (currentLat === null) return;
 
             let minDistance = Infinity;
+            let nearestPlace = "";
 
-            TREASURES.forEach((treasure, index) => {
-                if (foundTreasures.has(index)) return; // 発見済みの宝は無視
-
+            TREASURES.forEach((treasure) => {
                 const distance = calculateDistance(currentLat, currentLng, treasure.lat, treasure.lng);
-                
                 if (distance < minDistance) {
                     minDistance = distance;
-                }
-
-                // 指定した距離以内に入ったら「発見」
-                if (distance <= FIND_RADIUS) {
-                    foundTreasures.add(index);
-                    showFoundScreen(treasure);
+                    nearestPlace = treasure.name;
                 }
             });
 
             if (minDistance !== Infinity) {
-                distanceInfo.innerText = `一番近い宝まで: 約 ${Math.round(minDistance)} m`;
-            } else {
-                distanceInfo.innerText = "すべての宝を見つけました！";
+                distanceInfo.innerText = `一番近い【${nearestPlace}】まで: 約 ${Math.round(minDistance)} m`;
             }
         }
 
-        // 発見画面への切り替え処理
-        function showFoundScreen(treasure) {
-            gameScreen.style.display = 'none';
-            foundScreen.style.display = 'block';
-            treasureTitle.innerText = `${treasure.name} を発見！`;
-            treasureImage.src = treasure.img;
-            document.body.classList.remove('found-direction');
-        }
-
+        // スマホの向き（コンパス）の処理
         function handleOrientation(event) {
             if (currentLat === null || gameScreen.style.display === 'none') return;
 
             let heading = null;
             if (event.webkitCompassHeading) {
-                heading = event.webkitCompassHeading;
+                heading = event.webkitCompassHeading; // iOS Safari
             } else if (event.alpha !== null) {
-                heading = 360 - event.alpha;
+                heading = 360 - event.alpha; // Androidなど
             }
             if (heading === null) return;
 
-            let isLookingAtTreasure = false;
+            let targetTreasure = null;
 
-            TREASURES.forEach((treasure, index) => {
-                if (foundTreasures.has(index)) return; // 発見済みの宝の方向は無視
-
+            // 向いている方向に目的地があるか判定
+            TREASURES.forEach((treasure) => {
                 let bearing = calculateBearing(currentLat, currentLng, treasure.lat, treasure.lng);
                 let diff = Math.abs(heading - bearing);
                 if (diff > 180) diff = 360 - diff;
                 
-                if (diff <= 5) { // 少し甘めに±5度に設定
-                    isLookingAtTreasure = true;
+                // ±10度以内の方向を向いていたら反応する（5度だと厳しすぎるため調整）
+                if (diff <= 10) { 
+                    targetTreasure = treasure;
                 }
             });
 
-            if (isLookingAtTreasure) {
+            // 画面の表示切り替え
+            if (targetTreasure) {
                 document.body.classList.add('found-direction');
-                messageDisplay.innerText = "✨ ドンピシャ！前進せよ ✨";
+                messageDisplay.innerHTML = `✨ この方角にあります ✨<br><span class="destination-name">【 ${targetTreasure.name} 】</span>`;
             } else {
                 document.body.classList.remove('found-direction');
-                messageDisplay.innerText = "宝の方向を探せ！";
+                messageDisplay.innerHTML = "スマホを持って周りを見渡せ！";
             }
         }
 
-        // 2点間の「距離（メートル）」を計算する関数（ヒュベニの公式/ハヴァサイン公式等）
+        // 2点間の距離（メートル）を計算
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000; // 地球の半径 (メートル)
+            const R = 6371000;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -241,7 +196,7 @@
             return R * c;
         }
 
-        // 2点間の「方位角」を計算する関数
+        // 2点間の方位角を計算
         function calculateBearing(lat1, lon1, lat2, lon2) {
             const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
