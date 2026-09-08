@@ -12,25 +12,34 @@
             padding: 0;
             background-color: #2c3e50;
             color: white;
-            transition: background-color 0.2s ease; /* 色の切り替えを少し滑らかに */
+            transition: background-color 0.2s ease;
             display: flex;
             flex-direction: column;
             justify-content: center;
             height: 100vh;
         }
-        #start-screen, #game-screen {
+        #start-screen, #game-screen, #arrival-screen {
             padding: 20px;
         }
         button {
-            padding: 15px 30px;
-            font-size: 18px;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: bold;
             background-color: #e74c3c;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            margin-top: 20px;
+        }
+        .btn-cancel {
+            background-color: #95a5a6; /* グレー */
+        }
+        #arrival-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 30px;
         }
         .big-text {
             font-size: 22px;
@@ -47,6 +56,11 @@
             color: #e74c3c;
             display: block;
             margin-top: 10px;
+        }
+        #arrival-message {
+            font-size: 36px;
+            color: #f1c40f;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
     </style>
 </head>
@@ -66,30 +80,49 @@
         <p id="distance-info">位置情報を取得中...</p>
     </div>
 
+    <!-- 到着画面 -->
+    <div id="arrival-screen" style="display: none;">
+        <h2 id="arrival-message" class="big-text"></h2>
+        <div id="arrival-buttons">
+            <button id="arrival-cancel-btn" class="btn-cancel">まだ到着してない</button>
+            <button id="arrival-ok-btn">到着した！</button>
+        </div>
+    </div>
+
     <script>
         // クエストの座標リスト
         const TREASURES = [
             { name: "千古の家", lat: 36.1539527, lng: 136.3337006 },
-            { name: "メロディパーク", lat: 36.1616815, lng: 139.637095 },
-            { name: "ヤギ", lat: 36.1616538, lng: 136.3318184 },
-            { name: "日吉神社", lat: 36.1670457, lng: 136.3310140 }, // ← カンマ抜けを修正しました
-            { name: "ハゲ山", lat: 36.1646828, lng: 136.3347373},
-            { name: "広瀬橋", lat: 36.1591056, lng: 136.3325134}
+            { name: "メロディパーク", lat: 36.1617997, lng: 139.3332570},
+            { name: "ヤギ", lat: 36.1616538, lng: 136.3318184 },
+            { name: "日吉神社", lat: 36.1670457, lng: 136.3310140 }, // ← カンマ抜けを修正しました
+            { name: "ハゲ山", lat: 36.1646828, lng: 136.3347373},
+            { name: "広瀬橋", lat: 36.1591056, lng: 136.3325134},
+            { name: "予告灯", lat: 36.1602842, lng: 136.3323756},
         ];
+
+        const ARRIVAL_RADIUS = 20; // 到着と判定する距離（メートル）
 
         let currentLat = null;
         let currentLng = null;
         let watchId = null;
+        let foundPlaces = new Set(); 
+        let isArrivedState = false; 
+        let currentArrivedIndex = null;
+        let ignoreArrivalIndex = -1; // 「まだ到着していない」を押した際に一時的に到着画面を無視するインデックス
 
         const startBtn = document.getElementById('start-btn');
         const startScreen = document.getElementById('start-screen');
         const gameScreen = document.getElementById('game-screen');
+        const arrivalScreen = document.getElementById('arrival-screen');
+        const arrivalMessage = document.getElementById('arrival-message');
+        const arrivalOkBtn = document.getElementById('arrival-ok-btn');
+        const arrivalCancelBtn = document.getElementById('arrival-cancel-btn');
         const messageDisplay = document.getElementById('message');
         const distanceInfo = document.getElementById('distance-info');
 
-        // スタートボタンを押した時の処理
+        // スタートボタン
         startBtn.addEventListener('click', async () => {
-            // iOS向けのコンパス許可リクエスト
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceOrientationEvent.requestPermission();
@@ -107,6 +140,33 @@
 
             startGeolocation();
             window.addEventListener('deviceorientation', handleOrientation, true);
+        });
+
+        // 「到着した！」ボタンを押したときの処理
+        arrivalOkBtn.addEventListener('click', () => {
+            foundPlaces.add(currentArrivedIndex);
+            
+            isArrivedState = false;
+            currentArrivedIndex = null;
+            ignoreArrivalIndex = -1;
+            
+            arrivalScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+            
+            checkDistance(); 
+        });
+
+        // 「まだ到着してない」ボタンを押したときの処理
+        arrivalCancelBtn.addEventListener('click', () => {
+            ignoreArrivalIndex = currentArrivedIndex; 
+
+            isArrivedState = false;
+            currentArrivedIndex = null;
+            
+            arrivalScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+            
+            checkDistance();
         });
 
         // 位置情報の取得
@@ -130,53 +190,86 @@
             );
         }
 
-        // 一番近い場所までの距離を計算して表示
+        // 一番近い場所までの距離を計算して表示＆到着判定
         function checkDistance() {
-            if (currentLat === null) return;
+            if (currentLat === null || isArrivedState) return;
 
             let minDistance = Infinity;
             let nearestPlace = "";
+            let nearestIndex = -1;
 
-            TREASURES.forEach((treasure) => {
+            TREASURES.forEach((treasure, index) => {
+                if (foundPlaces.has(index)) return; 
+
                 const distance = calculateDistance(currentLat, currentLng, treasure.lat, treasure.lng);
                 if (distance < minDistance) {
                     minDistance = distance;
                     nearestPlace = treasure.name;
+                    nearestIndex = index;
                 }
             });
 
+            // 【変更点】誤判定キャンセルした場所から「25m以上離れる」または「10m以内に近づいた」場合に無視状態を解除
+            if (ignoreArrivalIndex !== -1 && nearestIndex === ignoreArrivalIndex) {
+                if (minDistance >= 25 || minDistance <= 10) {
+                    ignoreArrivalIndex = -1;
+                }
+            }
+
+            // 到着判定 (無視リストに入っていない場合のみ)
+            if (minDistance <= ARRIVAL_RADIUS && nearestIndex !== -1 && nearestIndex !== ignoreArrivalIndex) {
+                showArrivalScreen(nearestIndex, nearestPlace);
+                return;
+            }
+
+            // 残りの目的地がある場合
             if (minDistance !== Infinity) {
                 distanceInfo.innerText = `一番近い【${nearestPlace}】まで: 約 ${Math.round(minDistance)} m`;
+            } else {
+                distanceInfo.innerText = "レーダーの反応が消えました";
+                document.body.classList.remove('found-direction');
+                messageDisplay.innerHTML = "スマホを持って周りを見渡せ！";
             }
+        }
+
+        // 到着画面の表示
+        function showArrivalScreen(index, name) {
+            isArrivedState = true;
+            currentArrivedIndex = index;
+            document.body.classList.remove('found-direction'); 
+            
+            gameScreen.style.display = 'none';
+            arrivalScreen.style.display = 'block';
+            arrivalMessage.innerText = `${name} 到着！`;
         }
 
         // スマホの向き（コンパス）の処理
         function handleOrientation(event) {
-            if (currentLat === null || gameScreen.style.display === 'none') return;
+            if (currentLat === null || gameScreen.style.display === 'none' || isArrivedState) return;
+            if (foundPlaces.size === TREASURES.length) return;
 
             let heading = null;
             if (event.webkitCompassHeading) {
-                heading = event.webkitCompassHeading; // iOS Safari
+                heading = event.webkitCompassHeading; 
             } else if (event.alpha !== null) {
-                heading = 360 - event.alpha; // Androidなど
+                heading = 360 - event.alpha; 
             }
             if (heading === null) return;
 
             let targetTreasure = null;
 
-            // 向いている方向に目的地があるか判定
-            TREASURES.forEach((treasure) => {
+            TREASURES.forEach((treasure, index) => {
+                if (foundPlaces.has(index)) return; 
+
                 let bearing = calculateBearing(currentLat, currentLng, treasure.lat, treasure.lng);
                 let diff = Math.abs(heading - bearing);
                 if (diff > 180) diff = 360 - diff;
                 
-                // ±10度以内の方向を向いていたら反応する（5度だと厳しすぎるため調整）
                 if (diff <= 10) { 
                     targetTreasure = treasure;
                 }
             });
 
-            // 画面の表示切り替え
             if (targetTreasure) {
                 document.body.classList.add('found-direction');
                 messageDisplay.innerHTML = `✨ この方角にあります ✨<br><span class="destination-name">【 ${targetTreasure.name} 】</span>`;
