@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>方向探知レーダー ＆ スクロールページ</title>
+    <title>方向探知レーダー ＆ 写真ギャラリー</title>
     <style>
         body {
             font-family: sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f8f9fa; /* 通常ページの背景色 */
+            background-color: #f8f9fa; /* 背景色 */
             color: #333;
         }
 
@@ -18,9 +18,21 @@
             padding: 20px;
             max-width: 800px;
             margin: 0 auto;
-            line-height: 1.6;
-            /* 右上のウィジェットとテキストが被らないようにPCでは右に余白を設ける */
-            padding-right: 260px;
+            /* 右上のウィジェットと被らないようにPCでは右に余白を設ける */
+            padding-right: 260px; 
+            padding-bottom: 100px;
+        }
+
+        /* --- 画像用のスタイル --- */
+        .spot-card {
+            margin-bottom: 30px; /* 写真と写真の間の余白 */
+            text-align: center;
+        }
+        .responsive-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px; /* 写真の角を少し丸くする */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* 軽い影をつける */
         }
 
         /* --- 右上に固定するレーダーウィジェット --- */
@@ -39,7 +51,6 @@
             transition: background-color 0.2s ease;
         }
 
-        /* ウィジェット内のテキスト・ボタンサイズを縮小 */
         #radar-widget h2 {
             font-size: 16px;
             margin: 0 0 10px 0;
@@ -66,7 +77,7 @@
         }
         #arrival-buttons {
             display: flex;
-            flex-direction: column; /* 狭いので縦並びに変更 */
+            flex-direction: column;
             gap: 10px;
             margin-top: 15px;
         }
@@ -94,7 +105,7 @@
             color: #2c3e50 !important;
         }
         .found-direction .destination-name {
-            color: #c0392b; /* 背景が黄色い時に見やすい赤 */
+            color: #c0392b;
         }
 
         /* スマホ画面向けのレイアウト調整 */
@@ -116,21 +127,16 @@
 
     <!-- レーダーウィジェット（右上に固定） -->
     <div id="radar-widget">
-        <!-- スタート画面 -->
         <div id="start-screen">
             <h2>クエストスタート</h2>
             <p>位置情報とコンパスを使用します</p>
             <button id="start-btn">レーダー起動</button>
         </div>
-
-        <!-- レーダー画面 -->
         <div id="game-screen" style="display: none;">
             <h2>クイズレーダー</h2>
             <div id="message" class="big-text">スマホを持って周りを見渡せ！</div>
             <p id="distance-info">位置情報を取得中...</p>
         </div>
-
-        <!-- 到着画面 -->
         <div id="arrival-screen" style="display: none;">
             <h2 id="arrival-message" class="big-text"></h2>
             <div id="arrival-buttons">
@@ -140,28 +146,31 @@
         </div>
     </div>
 
-    <!-- 通常のスクロール可能なコンテンツ領域 -->
+    <!-- ===== 画像を表示するエリア ===== -->
     <div id="main-content">
-        <h1>福井県 クエストラリー</h1>
-        <p>画面右上のレーダーを頼りに、指定されたスポットを探してください。正しい方向を向くとレーダーが反応します。</p>
         
-        <h2>スポット一覧</h2>
-        <ul>
-            <li>千古の家</li>
-            <li>竹田水車メロディパーク</li>
-            <li>ヤギ</li>
-            <li>日𠮷神社</li>
-            <li>ちくちくぼんぼんの裏の山</li>
-            <li>広瀬橋</li>
-            <li>予告灯</li>
-        </ul>
+        <!-- 1枚目の写真 -->
+        <div class="spot-card">
+            <!-- ▼▼ src="" の中に画像のリンク（パス）を入れてください ▼▼ -->
+            <img src="images/spot1.jpg" alt="" class="responsive-img">
+        </div>
 
-        <h2>イベントのルール</h2>
-        <p>ここにスクロールして読ませたいルールや文章、画像などを自由に配置できます。</p>
-        <!-- スクロール確認用のダミーテキスト -->
-        <p style="margin-bottom: 800px;">（スクロールテスト用の余白）</p>
-        <p>ページの一番下です。</p>
+        <!-- 2枚目の写真 -->
+        <div class="spot-card">
+            <!-- ▼▼ src="" の中に画像のリンク（パス）を入れてください ▼▼ -->
+            <img src="images/spot2.jpg" alt="" class="responsive-img">
+        </div>
+
+        <!-- 3枚目の写真 -->
+        <div class="spot-card">
+            <!-- ▼▼ src="" の中に画像のリンク（パス）を入れてください ▼▼ -->
+            <img src="images/spot3.jpg" alt="" class="responsive-img">
+        </div>
+
+        <!-- ※ 写真を増やす場合は、上の <div class="spot-card">...</div> をコピー＆ペーストしてください -->
+
     </div>
+    <!-- ================================== -->
 
     <script>
         const TREASURES = [
@@ -184,9 +193,7 @@
         let currentArrivedIndex = null;
         let ignoreArrivalIndex = -1; 
 
-        // ウィジェット全体を取得
         const radarWidget = document.getElementById('radar-widget');
-
         const startBtn = document.getElementById('start-btn');
         const startScreen = document.getElementById('start-screen');
         const gameScreen = document.getElementById('game-screen');
@@ -330,11 +337,9 @@
             });
 
             if (targetTreasure) {
-                // body ではなく widget の背景色を変える
                 radarWidget.classList.add('found-direction');
                 messageDisplay.innerHTML = `✨ この方角にあります ✨<br><span class="destination-name">【 ${targetTreasure.name} 】</span>`;
             } else {
-                // body ではなく widget の背景色を元に戻す
                 radarWidget.classList.remove('found-direction');
                 messageDisplay.innerHTML = "スマホを持って周りを見渡せ！";
             }
