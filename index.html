@@ -3,105 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>方向探知レーダー</title>
+    <title>方向探知レーダー ＆ スクロールページ</title>
     <style>
         body {
             font-family: sans-serif;
-            text-align: center;
             margin: 0;
             padding: 0;
+            background-color: #f8f9fa; /* 通常ページの背景色 */
+            color: #333;
+        }
+
+        /* --- スクロール可能なメインコンテンツ用 --- */
+        #main-content {
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            /* 右上のウィジェットとテキストが被らないようにPCでは右に余白を設ける */
+            padding-right: 260px;
+        }
+
+        /* --- 右上に固定するレーダーウィジェット --- */
+        #radar-widget {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 220px;
             background-color: #2c3e50;
             color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            padding: 15px;
+            text-align: center;
+            z-index: 1000;
             transition: background-color 0.2s ease;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            height: 100vh;
         }
-        #start-screen, #game-screen, #arrival-screen {
-            padding: 20px;
-        }
-        button {
-            padding: 15px 20px;
+
+        /* ウィジェット内のテキスト・ボタンサイズを縮小 */
+        #radar-widget h2 {
             font-size: 16px;
+            margin: 0 0 10px 0;
+        }
+        #radar-widget p {
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        #radar-widget button {
+            padding: 10px;
+            font-size: 14px;
             font-weight: bold;
             background-color: #e74c3c;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            width: 100%;
+            margin-top: 5px;
         }
-        .btn-cancel {
-            background-color: #95a5a6; /* グレー */
+        #radar-widget .btn-cancel {
+            background-color: #95a5a6; 
         }
         #arrival-buttons {
             display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 30px;
+            flex-direction: column; /* 狭いので縦並びに変更 */
+            gap: 10px;
+            margin-top: 15px;
         }
         .big-text {
-            font-size: 22px;
+            font-size: 14px;
             font-weight: bold;
-            margin: 20px 0;
-            line-height: 1.5;
-        }
-        .found-direction {
-            background-color: #f1c40f !important;
-            color: #2c3e50;
+            margin: 10px 0;
+            line-height: 1.4;
         }
         .destination-name {
-            font-size: 32px;
+            font-size: 18px;
             color: #e74c3c;
             display: block;
-            margin-top: 10px;
+            margin-top: 5px;
         }
         #arrival-message {
-            font-size: 36px;
+            font-size: 20px;
             color: #f1c40f;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* 発見時のウィジェット色変更 */
+        .found-direction {
+            background-color: #f1c40f !important;
+            color: #2c3e50 !important;
+        }
+        .found-direction .destination-name {
+            color: #c0392b; /* 背景が黄色い時に見やすい赤 */
+        }
+
+        /* スマホ画面向けのレイアウト調整 */
+        @media (max-width: 600px) {
+            #main-content {
+                padding-right: 20px;
+                padding-top: 220px; /* ウィジェットが上部を覆うため、上部に余白を設ける */
+            }
+            #radar-widget {
+                top: 10px;
+                right: 10px;
+                width: calc(100% - 50px);
+                max-width: 300px;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- スタート画面 -->
-    <div id="start-screen">
-        <h2>クエストスタート</h2>
-        <p>位置情報とコンパスを使用します</p>
-        <button id="start-btn">レーダー起動</button>
-    </div>
+    <!-- レーダーウィジェット（右上に固定） -->
+    <div id="radar-widget">
+        <!-- スタート画面 -->
+        <div id="start-screen">
+            <h2>クエストスタート</h2>
+            <p>位置情報とコンパスを使用します</p>
+            <button id="start-btn">レーダー起動</button>
+        </div>
 
-    <!-- レーダー画面 -->
-    <div id="game-screen" style="display: none;">
-        <h2>クイズレーダー</h2>
-        <div id="message" class="big-text">スマホを持って周りを見渡せ！</div>
-        <p id="distance-info">位置情報を取得中...</p>
-    </div>
+        <!-- レーダー画面 -->
+        <div id="game-screen" style="display: none;">
+            <h2>クイズレーダー</h2>
+            <div id="message" class="big-text">スマホを持って周りを見渡せ！</div>
+            <p id="distance-info">位置情報を取得中...</p>
+        </div>
 
-    <!-- 到着画面 -->
-    <div id="arrival-screen" style="display: none;">
-        <h2 id="arrival-message" class="big-text"></h2>
-        <div id="arrival-buttons">
-            <button id="arrival-cancel-btn" class="btn-cancel">まだ到着してない</button>
-            <button id="arrival-ok-btn">到着した！</button>
+        <!-- 到着画面 -->
+        <div id="arrival-screen" style="display: none;">
+            <h2 id="arrival-message" class="big-text"></h2>
+            <div id="arrival-buttons">
+                <button id="arrival-ok-btn">到着した！</button>
+                <button id="arrival-cancel-btn" class="btn-cancel">まだ到着してない</button>
+            </div>
         </div>
     </div>
 
+    <!-- 通常のスクロール可能なコンテンツ領域 -->
+    <div id="main-content">
+        <h1>福井県 クエストラリー</h1>
+        <p>画面右上のレーダーを頼りに、指定されたスポットを探してください。正しい方向を向くとレーダーが反応します。</p>
+        
+        <h2>スポット一覧</h2>
+        <ul>
+            <li>千古の家</li>
+            <li>竹田水車メロディパーク</li>
+            <li>ヤギ</li>
+            <li>日𠮷神社</li>
+            <li>ちくちくぼんぼんの裏の山</li>
+            <li>広瀬橋</li>
+            <li>予告灯</li>
+        </ul>
+
+        <h2>イベントのルール</h2>
+        <p>ここにスクロールして読ませたいルールや文章、画像などを自由に配置できます。</p>
+        <!-- スクロール確認用のダミーテキスト -->
+        <p style="margin-bottom: 800px;">（スクロールテスト用の余白）</p>
+        <p>ページの一番下です。</p>
+    </div>
+
     <script>
-        // クエストの座標リスト
         const TREASURES = [
             { name: "千古の家", lat: 36.1539527, lng: 136.3337006 },
-            { name: "竹田水車メロディパーク", lat: 36.1617997, lng: 139.3332570},
-            { name: "ヤギ", lat: 36.1616538, lng: 136.3318184 },
-            { name: "日𠮷神社", lat: 36.154939, lng: 136.332992 }, // ← カンマ抜けを修正しました
-            { name: "ちくちくぼんぼんの裏の山", lat: 36.1646828, lng: 136.3347373},
-            { name: "広瀬橋", lat: 36.1591056, lng: 136.3325134},
+            { name: "竹田水車メロディパーク", lat: 36.1617997, lng: 139.3332570},
+            { name: "ヤギ", lat: 36.1616538, lng: 136.3318184 },
+            { name: "日𠮷神社", lat: 36.154939, lng: 136.332992 },
+            { name: "ちくちくぼんぼんの裏の山", lat: 36.1646828, lng: 136.3347373},
+            { name: "広瀬橋", lat: 36.1591056, lng: 136.3325134},
             { name: "予告灯", lat: 36.1602842, lng: 136.3323756},
         ];
 
-        const ARRIVAL_RADIUS = 20; // 到着と判定する距離（メートル）
+        const ARRIVAL_RADIUS = 20;
 
         let currentLat = null;
         let currentLng = null;
@@ -109,7 +182,10 @@
         let foundPlaces = new Set(); 
         let isArrivedState = false; 
         let currentArrivedIndex = null;
-        let ignoreArrivalIndex = -1; // 「まだ到着していない」を押した際に一時的に到着画面を無視するインデックス
+        let ignoreArrivalIndex = -1; 
+
+        // ウィジェット全体を取得
+        const radarWidget = document.getElementById('radar-widget');
 
         const startBtn = document.getElementById('start-btn');
         const startScreen = document.getElementById('start-screen');
@@ -121,7 +197,6 @@
         const messageDisplay = document.getElementById('message');
         const distanceInfo = document.getElementById('distance-info');
 
-        // スタートボタン
         startBtn.addEventListener('click', async () => {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
@@ -134,48 +209,38 @@
                     console.error(error);
                 }
             }
-
             startScreen.style.display = 'none';
             gameScreen.style.display = 'block';
-
             startGeolocation();
             window.addEventListener('deviceorientation', handleOrientation, true);
         });
 
-        // 「到着した！」ボタンを押したときの処理
         arrivalOkBtn.addEventListener('click', () => {
             foundPlaces.add(currentArrivedIndex);
-            
             isArrivedState = false;
             currentArrivedIndex = null;
             ignoreArrivalIndex = -1;
             
             arrivalScreen.style.display = 'none';
             gameScreen.style.display = 'block';
-            
             checkDistance(); 
         });
 
-        // 「まだ到着してない」ボタンを押したときの処理
         arrivalCancelBtn.addEventListener('click', () => {
             ignoreArrivalIndex = currentArrivedIndex; 
-
             isArrivedState = false;
             currentArrivedIndex = null;
             
             arrivalScreen.style.display = 'none';
             gameScreen.style.display = 'block';
-            
             checkDistance();
         });
 
-        // 位置情報の取得
         function startGeolocation() {
             if (!navigator.geolocation) {
                 alert('このブラウザは位置情報に対応していません。');
                 return;
             }
-
             watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     currentLat = position.coords.latitude;
@@ -190,7 +255,6 @@
             );
         }
 
-        // 一番近い場所までの距離を計算して表示＆到着判定
         function checkDistance() {
             if (currentLat === null || isArrivedState) return;
 
@@ -209,41 +273,36 @@
                 }
             });
 
-            // 【変更点】誤判定キャンセルした場所から「25m以上離れる」または「10m以内に近づいた」場合に無視状態を解除
             if (ignoreArrivalIndex !== -1 && nearestIndex === ignoreArrivalIndex) {
                 if (minDistance >= 25 || minDistance <= 10) {
                     ignoreArrivalIndex = -1;
                 }
             }
 
-            // 到着判定 (無視リストに入っていない場合のみ)
             if (minDistance <= ARRIVAL_RADIUS && nearestIndex !== -1 && nearestIndex !== ignoreArrivalIndex) {
                 showArrivalScreen(nearestIndex, nearestPlace);
                 return;
             }
 
-            // 残りの目的地がある場合
             if (minDistance !== Infinity) {
                 distanceInfo.innerText = `一番近い【${nearestPlace}】まで: 約 ${Math.round(minDistance)} m`;
             } else {
                 distanceInfo.innerText = "レーダーの反応が消えました";
-                document.body.classList.remove('found-direction');
+                radarWidget.classList.remove('found-direction');
                 messageDisplay.innerHTML = "スマホを持って周りを見渡せ！";
             }
         }
 
-        // 到着画面の表示
         function showArrivalScreen(index, name) {
             isArrivedState = true;
             currentArrivedIndex = index;
-            document.body.classList.remove('found-direction'); 
+            radarWidget.classList.remove('found-direction'); 
             
             gameScreen.style.display = 'none';
             arrivalScreen.style.display = 'block';
             arrivalMessage.innerText = `${name} 到着！`;
         }
 
-        // スマホの向き（コンパス）の処理
         function handleOrientation(event) {
             if (currentLat === null || gameScreen.style.display === 'none' || isArrivedState) return;
             if (foundPlaces.size === TREASURES.length) return;
@@ -271,15 +330,16 @@
             });
 
             if (targetTreasure) {
-                document.body.classList.add('found-direction');
+                // body ではなく widget の背景色を変える
+                radarWidget.classList.add('found-direction');
                 messageDisplay.innerHTML = `✨ この方角にあります ✨<br><span class="destination-name">【 ${targetTreasure.name} 】</span>`;
             } else {
-                document.body.classList.remove('found-direction');
+                // body ではなく widget の背景色を元に戻す
+                radarWidget.classList.remove('found-direction');
                 messageDisplay.innerHTML = "スマホを持って周りを見渡せ！";
             }
         }
 
-        // 2点間の距離（メートル）を計算
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371000;
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -291,7 +351,6 @@
             return R * c;
         }
 
-        // 2点間の方位角を計算
         function calculateBearing(lat1, lon1, lat2, lon2) {
             const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
