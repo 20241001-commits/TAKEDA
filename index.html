@@ -54,6 +54,21 @@
             box-shadow: 0 0 5px rgba(52, 152, 219, 0.4);
         }
 
+        /* --- 画像添付ボックスのスタイル --- */
+        .file-input {
+            width: 100%;
+            max-width: 320px;
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 14px;
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: #ffffff;
+            cursor: pointer;
+            text-align: center;
+        }
+
         /* --- 右上に固定するレーダーウィジェット --- */
         #radar-widget {
             position: fixed;
@@ -168,16 +183,14 @@
     <!-- ===== 画像を表示するエリア ===== -->
     <div id="main-content">
         
-        <!-- 1枚目の写真 -->
+        <!-- 1枚目の写真（テキストボックス削除） -->
         <div class="spot-card">
             <img src="images/spot1.jpg" alt="" class="responsive-img">
-            <input type="text" class="answer-input" placeholder="ここに答えを書こう！">
         </div>
 
-        <!-- 2枚目の写真 -->
+        <!-- 2枚目の写真（テキストボックス削除） -->
         <div class="spot-card">
             <img src="images/spot2.jpg" alt="" class="responsive-img">
-            <input type="text" class="answer-input" placeholder="ここに答えを書こう！">
         </div>
 
         <!-- 3枚目の写真 -->
@@ -192,10 +205,12 @@
             <input type="text" class="answer-input" placeholder="ここに答えを書こう！">
         </div>
 
-        <!-- 5枚目の写真 -->
+        <!-- 5枚目の写真（画像添付エリア） -->
         <div class="spot-card">
             <img src="images/5.png" alt="" class="responsive-img">
-            <input type="text" class="answer-input" placeholder="ここに答えを書こう！">
+            <div>
+                <input type="file" class="file-input" accept="image/*">
+            </div>
         </div>
 
         <!-- 6枚目の写真 -->
